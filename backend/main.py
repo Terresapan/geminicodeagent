@@ -38,7 +38,7 @@ async def root():
 
 @app.post("/analyze")
 async def analyze(
-    file: UploadFile = File(...),
+    file: UploadFile = File(None),
     query: str = Form(...),
     model: str = Form("gemini-2.5-flash")
 ):
@@ -46,7 +46,7 @@ async def analyze(
     Analyze a file using AI with streaming response.
     
     Args:
-        file: The uploaded file to analyze
+        file: The uploaded file to analyze (optional)
         query: User's analysis query
         model: The AI model to use (default: gemini-2.5-flash)
         
@@ -54,15 +54,22 @@ async def analyze(
         StreamingResponse with analysis results in NDJSON format
     """
     try:
-        # Read file content before starting the stream to avoid closure issues
-        file_content = await file.read()
+        # Read file content if provided
+        file_content = None
+        filename = None
+        content_type = None
+        
+        if file:
+            file_content = await file.read()
+            filename = file.filename
+            content_type = file.content_type
         
         # Delegate to analysis service
         return StreamingResponse(
             analysis_service.analyze_file_stream(
                 file_content=file_content,
-                filename=file.filename,
-                content_type=file.content_type,
+                filename=filename,
+                content_type=content_type,
                 query=query,
                 model=model
             ),

@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 
 interface FileUploadProps {
-  onUpload: (file: File, query: string) => void;
+  onUpload: (file: File | null, query: string) => void;
   isLoading: boolean;
 }
 
@@ -43,7 +43,7 @@ export function FileUpload({ onUpload, isLoading }: FileUploadProps) {
   };
 
   const handleSubmit = () => {
-    if (file) {
+    if (file || query.trim()) {
       onUpload(file, query);
     }
   };
@@ -105,7 +105,7 @@ export function FileUpload({ onUpload, isLoading }: FileUploadProps) {
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium block mb-3">Analysis Query (Optional)</label>
+        <label className="text-sm font-medium block mb-3">Analysis Query (Optional if file uploaded)</label>
         <Textarea
           placeholder="e.g., Analyze the sales trend for Q4..."
           value={query}
@@ -118,7 +118,7 @@ export function FileUpload({ onUpload, isLoading }: FileUploadProps) {
       <Button
         className="w-full"
         onClick={handleSubmit}
-        disabled={!file || isLoading}
+        disabled={(!file && !query.trim()) || isLoading}
       >
         {isLoading ? 'Analyzing...' : 'Analyze Data'}
       </Button>
