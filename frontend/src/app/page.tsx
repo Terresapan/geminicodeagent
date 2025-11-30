@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { FileUpload } from "@/components/file-upload";
 import { AnalysisTab } from "@/components/analysis-tab";
 import { CodeTab } from "@/components/code-tab";
@@ -14,15 +14,28 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { analyzeFile, AnalysisPart } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { createChat, sendChatMessage, deleteChat, AnalysisPart } from "@/lib/api";
 import { Card } from "@/components/ui/card";
+import { Send, Loader2, Trash2, DollarSign } from "lucide-react";
+
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [analysisParts, setAnalysisParts] = useState<AnalysisPart[]>([]);
   const [activeTab, setActiveTab] = useState("analysis");
   const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash");
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
+  const [chatId, setChatId] = useState<string | null>(null);
+  const [chatInput, setChatInput] = useState("");
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const loadingMessages = [
     "Processing your file...",
@@ -49,31 +62,103 @@ export default function Home() {
     }
   }, [isLoading]);
 
+  // Scroll to bottom of chat history
+  React.useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatHistory]);
+
   const handleUpload = async (file: File | null, query: string) => {
     setIsLoading(true);
     setAnalysisParts([]);
+    setChatHistory([{ role: "user", content: query }]);
+
     try {
-      const result = await analyzeFile(
-        file,
-        query,
-        selectedModel,
-        (progressParts) => {
-          // Update UI as chunks arrive
-          setAnalysisParts(progressParts);
-        }
-      );
-      console.log("Final Analysis Result:", result); // Debug logging
+      // 1. Create Chat Session
+      const { chat_id } = await createChat(file, selectedModel);
+      setChatId(chat_id);
+
+      // 2. Send Initial Message
+      const result = await sendChatMessage(chat_id, query, (progressParts) => {
+        // Update UI as chunks arrive
+        setAnalysisParts(progressParts);
+      });
+
+      console.log("Final Analysis Result:", result);
       if (Array.isArray(result)) {
         setAnalysisParts(result);
+        // Add assistant response to history (summarized or just a marker)
+        setChatHistory((prev) => [
+          ...prev,
+          { role: "assistant", content: "Analysis complete. See results tab." },
+        ]);
       } else {
         console.error("Analysis failed:", result);
         alert(`Analysis failed: ${JSON.stringify(result)}`);
       }
     } catch (error) {
       console.error("Error:", error);
-      // Handle error (maybe show a toast)
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!chatId || !chatInput.trim() || isLoading) return;
+
+    const message = chatInput.trim();
+    setChatInput("");
+    setIsLoading(true);
+    setChatHistory((prev) => [...prev, { role: "user", content: message }]);
+
+    try {
+      const result = await sendChatMessage(chatId, message, (progressParts) => {
+        setAnalysisParts(progressParts);
+      });
+
+      if (Array.isArray(result)) {
+        setAnalysisParts(result);
+        setChatHistory((prev) => [
+          ...prev,
+          { role: "assistant", content: "Analysis updated. See results tab." },
+        ]);
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  const handleDeleteChat = async () => {
+    if (!chatId) return;
+    
+    if (!confirm("Are you sure you want to delete this chat session? This action cannot be undone.")) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await deleteChat(chatId);
+      // Reset state
+      setChatId(null);
+      setChatHistory([]);
+      setAnalysisParts([]);
+      setActiveTab("analysis");
+      setChatInput("");
+    } catch (error) {
+      console.error("Error deleting chat:", error);
+      alert("Failed to delete chat session");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -87,6 +172,16 @@ export default function Home() {
     .filter((p) => p.executableCode)
     .map((p) => p.executableCode?.code)
     .join("\n\n# Next Block\n\n");
+
+  // Extract cost data
+  const costData = React.useMemo(() => {
+    for (let i = analysisParts.length - 1; i >= 0; i--) {
+      if (analysisParts[i].costData) {
+        return analysisParts[i].costData;
+      }
+    }
+    return null;
+  }, [analysisParts]);
 
   // Deduplicate charts based on data content
   const uniqueCharts = new Map<string, { mime_type: string; data: string }>();
@@ -109,10 +204,13 @@ export default function Home() {
 
   const chartImages = Array.from(uniqueCharts.values());
 
-  console.log("Chart Images:", chartImages);
-
   // Deduplicate files
-  const uniqueFiles = new Map<string, any>();
+  interface FileData {
+    name: string;
+    uri: string;
+    mime_type: string;
+  }
+  const uniqueFiles = new Map<string, FileData>();
 
   analysisParts.forEach((p, i) => {
     // Handle inline data files (non-images)
@@ -166,7 +264,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-background text-foreground p-8">
       <div className="max-w-6xl mx-auto space-y-8">
-        <div className="text-center">
+        <div className="text-center space-y-4">
           <h1 className="text-4xl font-bold mb-2 bg-linear-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent">
             Data Analysis Agent
           </h1>
@@ -205,7 +303,94 @@ export default function Home() {
               </Select>
             </Card>
 
-            <FileUpload onUpload={handleUpload} isLoading={isLoading} />
+            {!chatId ? (
+              <FileUpload onUpload={handleUpload} isLoading={isLoading} />
+            ) : (
+              <Card className="p-4 bg-muted/50 flex flex-col h-[500px]">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-semibold">Chat History</h3>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    onClick={handleDeleteChat}
+                    disabled={isLoading || isDeleting}
+                    title="Delete Chat"
+                  >
+                    {isDeleting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                    <span className="sr-only">Delete Chat</span>
+                  </Button>
+                </div>
+                <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
+                  {chatHistory.map((msg, i) => (
+                    <div
+                      key={i}
+                      className={`p-3 rounded-lg text-sm ${
+                        msg.role === "user"
+                          ? "bg-primary text-primary-foreground ml-4"
+                          : "bg-muted text-muted-foreground mr-4"
+                      }`}
+                    >
+                      <p className="font-semibold text-xs mb-1 opacity-70">
+                        {msg.role === "user" ? "You" : "Assistant"}
+                      </p>
+                      {msg.content}
+                    </div>
+                  ))}
+                  <div ref={chatEndRef} />
+                </div>
+
+                <div className="space-y-2">
+                  <Textarea
+                    placeholder="Ask a follow-up question..."
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    className="min-h-20 resize-none"
+                    disabled={isLoading}
+                  />
+                  <Button
+                    className="w-full"
+                    onClick={handleSendMessage}
+                    disabled={isLoading || !chatInput.trim()}
+                  >
+                    {isLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    ) : (
+                      <Send className="w-4 h-4 mr-2" />
+                    )}
+                    Send
+                  </Button>
+                </div>
+              </Card>
+            )}
+
+            {costData && (
+              <Card className="p-4 bg-muted/50">
+                <h3 className="font-semibold mb-2 flex items-center gap-2">
+                  <DollarSign className="w-4 h-4" />
+                  Estimated Cost
+                </h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Input Tokens:</span>
+                    <span>{costData.input_tokens?.toLocaleString() || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Output Tokens:</span>
+                    <span>{costData.output_tokens?.toLocaleString() || 0}</span>
+                  </div>
+                  <div className="border-t pt-2 mt-2 flex justify-between font-medium">
+                    <span>Total Cost:</span>
+                    <span>${(costData.total_cost || 0).toFixed(6)}</span>
+                  </div>
+                </div>
+              </Card>
+            )}
 
             <Card className="p-4 bg-muted/50">
               <h3 className="font-semibold mb-1">Capabilities</h3>
