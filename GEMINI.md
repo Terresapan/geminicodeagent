@@ -17,6 +17,14 @@ The backend is built with Python 3.13+ and FastAPI. It uses the `google-genai` S
 *   **PDF Reporting:** The AI creates comprehensive PDF reports using the `reportlab` library (within the sandbox).
 *   **Stateful Chat:** Supports continuous conversation threads with context retention.
 *   **Streaming:** Responses (text, code, files) are streamed in real-time using NDJSON.
+*   **Cost Calculation:** Tracks and estimates API usage costs via `pricing.py`.
+
+### Architecture & Files
+*   `main.py`: Defines API routes (`/chat/create`, `/chat/{id}/message`, `/analyze`) and CORS settings.
+*   `services.py`: Core business logic (Free Tier optimized). Manages `AnalysisService`.
+*   `services_paid.py`: Alternative logic (Paid Tier) with explicit context caching and extended storage cost calculation.
+*   `pricing.py`: Handles token counting and cost estimation for various Gemini models.
+*   **Streaming:** All AI interactions use `StreamingResponse` to deliver multi-part content.
 
 ### Setup & Installation
 

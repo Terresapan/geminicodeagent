@@ -1,18 +1,18 @@
-# this version is for free tier usage with google genai
+# this version includes the explicit cache stratgey and detailed stroage cost calculation and it is only for paid tiers
 
 from google import genai
 from google.genai import types
 import base64
+import json
 import uuid
 import requests
 import asyncio
+import datetime
 from io import BytesIO
 from typing import AsyncGenerator, Dict, Any
-import json
 
 # Import the new pricing service
 from pricing import PricingService
-
 
 class AnalysisService:
     """Service for handling data analysis using Google GenAI."""
@@ -26,37 +26,106 @@ class AnalysisService:
     # ==================== Private Helper Methods ====================
     
     async def _upload_file(self, file_content: bytes, filename: str, content_type: str):
-        """Upload a file to Google's GenAI service asynchronously."""
+        """Uploads a file to Google GenAI."""
         print(f"Starting file upload: {filename} ({content_type})")
         file_obj = BytesIO(file_content)
         file_obj.name = filename
+        
         try:
-            # Use client.aio.files.upload for async upload
-            result = await self.client.aio.files.upload(
+            upload_result = await self.client.aio.files.upload(
                 file=file_obj,
                 config=types.FileDict(display_name=filename, mime_type=content_type)
             )
-            print(f"File upload successful: {result.name}")
-            return result
+            print(f"File uploaded to temporary storage: {upload_result.name}")
+            return upload_result
         except Exception as e:
             print(f"Error uploading file: {e}")
             raise e
 
-    def _get_chat_config(self) -> types.GenerateContentConfig:
-        """Get the standard chat configuration."""
-        return types.GenerateContentConfig(
-            tools=[types.Tool(code_execution=types.ToolCodeExecution)],
-            thinking_config=types.ThinkingConfig(
-                include_thoughts=True
+    async def _upload_and_cache_file(self, file_content: bytes, filename: str, content_type: str, ttl_minutes: int = 10, model: str = "gemini-2.5-flash"):
+        """
+        1. Uploads file to File API.
+        2. Creates a Context Cache from that file.
+        Returns the cache object.
+        """
+        try:
+            # Step A: Standard Upload (Required before caching)
+            upload_result = await self._upload_file(file_content, filename, content_type)
+
+            # Step B: Create Context Cache
+            # We explicitly tell Gemini to cache this file content.
+            ttl_seconds = f"{ttl_minutes * 60}s"
+            
+            print(f"Creating cache with TTL={ttl_seconds}...")
+            
+            # Ensure model has 'models/' prefix for cache creation if not present
+            cache_model = model if model.startswith("models/") else f"models/{model}"
+            
+            cache_result = await self.client.aio.caches.create(
+                model=cache_model, 
+                config=types.CreateCachedContentConfig(
+                    contents=[upload_result], # Pass the file object/URI here
+                    display_name=f"cache_{filename}",
+                    ttl=ttl_seconds,
+                    # Move tools definition to the cache config
+                    tools=[types.Tool(code_execution=types.ToolCodeExecution)],
+                )
             )
-        )
+            print(f"Cache created successfully: {cache_result.name}")
+            return cache_result
+
+        except Exception as e:
+            print(f"Error in upload_and_cache: {e}")
+            raise e
+        
+    async def _update_cache_heartbeat(self, cache_name: str, ttl_minutes: int = 10):
+        """
+        Resets the TTL (Time-To-Live) for an existing cache.
+        This acts as the 'Heartbeat' to keep the session alive.
+        """
+        try:
+            ttl_seconds = f"{ttl_minutes * 60}s"
+            await self.client.aio.caches.update(
+                name=cache_name,
+                config=types.UpdateCachedContentConfig(ttl=ttl_seconds)
+            )
+            print(f"💓 Heartbeat sent for {cache_name}. TTL reset to {ttl_minutes} mins.")
+        except Exception as e:
+            print(f"Failed to update heartbeat: {e}")
+            # Don't raise; we don't want to crash the chat just because heartbeat failed
+            pass
+
+
+    # ==================== 2. Helper Methods ====================
+    def _get_chat_config(self, cache_name: str = None) -> types.GenerateContentConfig:
+        """
+        Get chat config, optionally binding it to a Cached Content block.
+        """
+        # Base config with thinking mode (allowed in both cases)
+        config_args = {
+            "thinking_config": types.ThinkingConfig(include_thoughts=True)
+        }
+
+        # If we have a cache, we attach it. Tools must NOT be redeclared here.
+        if cache_name:
+            config_args["cached_content"] = cache_name
+        else:
+            # If NO cache, we must declare tools here.
+            config_args["tools"] = [types.Tool(code_execution=types.ToolCodeExecution)]
+            
+        return types.GenerateContentConfig(**config_args)
 
     def _download_file_sync(self, file_obj):
         """Synchronous helper to download file content."""
         if hasattr(file_obj, 'download'):
             return file_obj.download()
         elif hasattr(file_obj, 'uri'):
-            response_file = requests.get(file_obj.uri)
+            # Add API key to headers for authenticated access
+            headers = {}
+            if self.client.api_key:
+                headers["x-goog-api-key"] = self.client.api_key
+            
+            response_file = requests.get(file_obj.uri, headers=headers)
             response_file.raise_for_status()
             return response_file.content
         else:
@@ -100,13 +169,16 @@ class AnalysisService:
         if hasattr(part, 'file_data') and part.file_data:
             try:
                 # Get the file object from Google's service
-                # Use 'get' with 'files/...' name handling if necessary, but snippet assumes uri works with 'get' name?
-                # SDK 'get' usually requires 'files/ID'. part.file_data.file_uri is usually the URI.
-                # The original snippet passed file_uri to get(). Let's verify if that works or if we need name parsing.
-                # The original snippet: file_obj = await self.client.aio.files.get(name=part.file_data.file_uri)
-                # I'll keep it as is to match the "rollback" request precisely.
+                file_uri = part.file_data.file_uri
                 
-                file_obj = await self.client.aio.files.get(name=part.file_data.file_uri)
+                # The SDK's get() method expects 'files/ID', not the full URL
+                file_name_arg = file_uri
+                if "/files/" in file_uri:
+                    # Extract everything after and including "files/"
+                    # e.g. https://generativelanguage.googleapis.com/v1beta/files/abc -> files/abc
+                    file_name_arg = "files/" + file_uri.split("/files/")[-1]
+                
+                file_obj = await self.client.aio.files.get(name=file_name_arg)
                 file_name = getattr(file_obj, 'display_name', 'downloaded_file')
                 
                 # Download file content in a separate thread to avoid blocking
@@ -129,6 +201,8 @@ class AnalysisService:
                     "error": f"Network error: {str(req_error)}"
                 }
             except Exception as file_error:
+                import traceback
+                traceback.print_exc()
                 print(f"Error processing file {part.file_data.file_uri}: {file_error}")
                 part_dict["fileData"] = {
                     "mimeType": part.file_data.mime_type,
@@ -189,23 +263,6 @@ class AnalysisService:
                     usage_metadata=final_usage_metadata, 
                     model=model
                 )
-                
-                # Calculate storage cost (10 mins fixed for free tier approximation)
-                token_breakdown = cost_data.get("token_breakdown", {})
-                cached_tokens = token_breakdown.get("cached_input", 0)
-                
-                storage_cost = self.pricing_service.calculate_storage_cost(
-                    cached_tokens=cached_tokens,
-                    duration_minutes=10,
-                    model=model
-                )
-                
-                if "cost_breakdown" not in cost_data:
-                    cost_data["cost_breakdown"] = {}
-                
-                cost_data["cost_breakdown"]["storage_cost"] = storage_cost
-                cost_data["total_cost"] += storage_cost
-
                 if cost_data:
                     accumulated_parts.append({"costData": cost_data})
                     yield json.dumps(accumulated_parts) + "\n"
@@ -216,6 +273,7 @@ class AnalysisService:
             print(f"Error during stream processing: {e}")
             raise e
 
+    
     # ==================== Stateful Chat Methods ====================
     
     async def create_chat(
@@ -223,44 +281,44 @@ class AnalysisService:
         file_content: bytes | None = None,
         filename: str | None = None,
         content_type: str | None = None,
-        model: str = "gemini-2.5-flash"
+        model: str = "gemini-2.5-flash" 
     ) -> str:
         """
-        Create a new chat session with optional file attachment.
-        
-        Args:
-            file_content: The file content as bytes (optional)
-            filename: The original filename (optional)
-            content_type: The MIME type of the file (optional)
-            model: The GenAI model to use
-            
-        Returns:
-            Chat session ID
+        Create a new chat session. 
+        If a file is provided, it is UPLOADED AND CACHED immediately.
         """
         chat_id = str(uuid.uuid4())
         print(f"Creating chat session: {chat_id} with model: {model}")
         
-        # Upload file if provided
-        uploaded_file = None
+        cache_name = None
+        
+        # 1. Handle File Upload & Caching
         if file_content and filename and content_type:
-            uploaded_file = await self._upload_file(file_content, filename, content_type)
+            # We now use the caching method instead of just raw upload
+            cache_obj = await self._upload_and_cache_file(
+                file_content, filename, content_type
+            )
+            cache_name = cache_obj.name
         
         try:
-            # Create chat with file attachment if available       
+            # 2. Create Chat with Cache Config
+            # We pass the cache_name into the config. 
+            # The model will now "know" the file content automatically.
+            config = self._get_chat_config(cache_name=cache_name)
+            
             chat = self.client.aio.chats.create(
                 model=model,
-                config=self._get_chat_config()
+                config=config
             )
-            print(f"Chat created successfully via API: {chat_id}")
             
-            # Store chat session
             self._chat_sessions[chat_id] = {
                 'chat': chat,
                 'model': model,
-                'uploaded_file': uploaded_file
+                'cache_name': cache_name, # Store this so we can heartbeat it
+                'cache_created_at': datetime.datetime.now()
             }
-            
             return chat_id
+            
         except Exception as e:
             print(f"Failed to create chat: {e}")
             raise e
@@ -272,52 +330,53 @@ class AnalysisService:
         stream: bool = True
     ) -> AsyncGenerator[str, None]:
         """
-        Send a message to an existing chat session.
-        
-        Args:
-            chat_id: The chat session ID
-            message: The message to send
-            stream: Whether to stream the response
-            
-        Yields:
-            JSON strings containing response parts
+        Send a message. 
+        CRITICAL: Sends a heartbeat to the cache first!
         """
         if chat_id not in self._chat_sessions:
             raise ValueError(f"Chat session {chat_id} not found")
         
-        chat_session = self._chat_sessions[chat_id]
-        chat = chat_session['chat']
-        uploaded_file = chat_session.get('uploaded_file')
+        session_data = self._chat_sessions[chat_id]
+        chat = session_data['chat']
+        cache_name = session_data.get('cache_name')
 
-        # Prepare the message content
-        message_content = message
-        if uploaded_file:
-            # If there's a pending file, include it in the message
-            message_content = [uploaded_file, message]
-            # Clear the file so it's not sent again
-            chat_session['uploaded_file'] = None
-        
-        # Send the message
+        # 1. HEARTBEAT: Keep the cache alive
+        if cache_name:
+            await self._update_cache_heartbeat(cache_name, ttl_minutes=10)
+
+        # 2. Send Message (No need to attach file again, it's in the cache)
         try:
             if stream:
-                # Use send_message_stream for streaming (MUST BE AWAITED)
-                response = await chat.send_message_stream(message=message_content)
+                response = await chat.send_message_stream(message=message)
             else:
-                # Use send_message for non-streaming (awaited)
-                response = await chat.send_message(message=message_content)
-                # For consistency, wrapping non-stream response in list to use same helper
-                response = [response] 
+                response = await chat.send_message(message=message)
+                response = [response]
             
-            # Stream the response
-            async for chunk in self._stream_response(response, model=chat_session['model']):
+            async for chunk in self._stream_response(response, model=session_data['model']):
                 yield chunk
+                
         except Exception as e:
             print(f"Error sending message to chat {chat_id}: {e}")
             raise e
 
     def delete_chat(self, chat_id: str):
-        """Delete a chat session."""
+        """
+        Delete session AND delete the cache to stop billing.
+        """
         if chat_id in self._chat_sessions:
+            session = self._chat_sessions[chat_id]
+            cache_name = session.get('cache_name')
+            
+            # Clean up the cache to stop storage costs
+            if cache_name:
+                try:
+                    # Sync deletion (fire and forget)
+                    # Note: Ideally this should be async or background task
+                    self.client.caches.delete(name=cache_name)
+                    print(f"Deleted cache {cache_name}")
+                except Exception as e:
+                    print(f"Error deleting cache: {e}")
+
             del self._chat_sessions[chat_id]
 
     # ==================== One-Shot Analysis Method ====================
@@ -389,3 +448,4 @@ class AnalysisService:
         except Exception as e:
             print(f"Error in analyze_file_stream: {e}")
             raise e
+

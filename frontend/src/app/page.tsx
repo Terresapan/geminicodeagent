@@ -253,19 +253,24 @@ export default function Home() {
   const uniqueFiles = new Map<string, FileData>();
 
   analysisParts.forEach((p, i) => {
-    // Handle inline data files (non-images)
-    if (
-      p.inlineData &&
-      (p.inlineData.mimeType?.startsWith("image/") ||
-        p.inlineData.mime_type?.startsWith("image/"))
-    ) {
+    // Handle inline data files (images, PDFs, etc.)
+    if (p.inlineData) {
       const data = p.inlineData.data;
       const mimeType = p.inlineData.mimeType || p.inlineData.mime_type!;
-      const key = `inline-${data.substring(0, 100)}`; // Use start of data as key
+      const key = `inline-${data}`; // Use full data as key
 
       if (!uniqueFiles.has(key)) {
+        let name = `Generated File ${uniqueFiles.size + 1}`;
+        // Try to give a better name based on mime type
+        if (mimeType.includes("pdf"))
+          name = `Report ${uniqueFiles.size + 1}.pdf`;
+        else if (mimeType.includes("csv"))
+          name = `Data ${uniqueFiles.size + 1}.csv`;
+        else if (mimeType.includes("image"))
+          name = `Image ${uniqueFiles.size + 1}.png`; // Default to png for images if unknown
+
         uniqueFiles.set(key, {
-          name: `Generated File ${uniqueFiles.size + 1}`,
+          name: name,
           uri: `data:${mimeType};base64,${data}`,
           mime_type: mimeType,
         });
@@ -306,7 +311,7 @@ export default function Home() {
           src="/main.png"
           alt="App Preview"
           fill
-          className="object-cover opacity-80 blur-sm"
+          className="object-cover opacity-40 blur-sm"
           priority
         />
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-purple-900/20 rounded-full blur-3xl pointer-events-none" />
@@ -486,7 +491,7 @@ export default function Home() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Input Tokens:</span>
                     <span className="font-mono">
-                      {costData.input_tokens?.toLocaleString() || 0}
+                      {costData.token_breakdown?.new_input?.toLocaleString() || 0}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -494,9 +499,52 @@ export default function Home() {
                       Output Tokens:
                     </span>
                     <span className="font-mono">
-                      {costData.output_tokens?.toLocaleString() || 0}
+                      {costData.token_breakdown?.output?.toLocaleString() || 0}
                     </span>
                   </div>
+                  {(costData.token_breakdown?.cached_input || 0) > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">
+                        Context Caching Tokens:
+                      </span>
+                      <span className="font-mono">
+                        {costData.token_breakdown?.cached_input?.toLocaleString() || 0}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {/* Detailed Cost Breakdown */}
+                   <div className="border-t border-border/50 pt-2 mt-2 space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Input Cost:</span>
+                      <span className="font-mono">
+                        ${(costData.cost_breakdown?.input_cost || 0).toFixed(6)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Output Cost:</span>
+                      <span className="font-mono">
+                        ${(costData.cost_breakdown?.output_cost || 0).toFixed(6)}
+                      </span>
+                    </div>
+                    {(costData.cost_breakdown?.cache_read_cost || 0) > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Cache Read Cost:</span>
+                        <span className="font-mono">
+                          ${(costData.cost_breakdown?.cache_read_cost || 0).toFixed(6)}
+                        </span>
+                      </div>
+                    )}
+                    {(costData.cost_breakdown?.storage_cost || 0) > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Storage Cost (10m):</span>
+                        <span className="font-mono">
+                          ${(costData.cost_breakdown?.storage_cost || 0).toFixed(6)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="border-t border-border/50 pt-2 mt-2 flex justify-between font-medium">
                     <span>Total Cost:</span>
                     <span className="font-mono text-primary">
