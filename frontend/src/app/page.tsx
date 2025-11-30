@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { FileUpload } from "@/components/file-upload";
 import { AnalysisTab } from "@/components/analysis-tab";
 import { CodeTab } from "@/components/code-tab";
@@ -16,14 +16,19 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   createChat,
   sendChatMessage,
   deleteChat,
   AnalysisPart,
+  verifyAuth,
+  setAuthPassword,
 } from "@/lib/api";
 import { Card } from "@/components/ui/card";
-import { Send, Loader2, Trash2, DollarSign } from "lucide-react";
+import { Send, Loader2, Trash2, DollarSign, Lock } from "lucide-react";
+import Image from "next/image";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -31,6 +36,11 @@ interface ChatMessage {
 }
 
 export default function Home() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [authError, setAuthError] = useState("");
+
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [analysisParts, setAnalysisParts] = useState<AnalysisPart[]>([]);
@@ -56,7 +66,7 @@ export default function Home() {
   };
 
   // Rotate loading messages
-  React.useEffect(() => {
+  useEffect(() => {
     if (isLoading) {
       const interval = setInterval(() => {
         setLoadingMessageIndex((prev) => prev + 1);
@@ -68,11 +78,32 @@ export default function Home() {
   }, [isLoading]);
 
   // Scroll to bottom of chat history
-  React.useEffect(() => {
+  useEffect(() => {
     if (chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [chatHistory]);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsVerifying(true);
+    setAuthError("");
+
+    try {
+      const isValid = await verifyAuth(passwordInput);
+      if (isValid) {
+        setAuthPassword(passwordInput);
+        setIsAuthenticated(true);
+      } else {
+        setAuthError("Invalid password. Please try again.");
+      }
+    } catch (error) {
+      console.error("Authentication error:", error);
+      setAuthError("Authentication failed. Check backend connection.");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
   const handleUpload = async (file: File | null, query: string) => {
     setIsLoading(true);
@@ -225,10 +256,8 @@ export default function Home() {
     // Handle inline data files (non-images)
     if (
       p.inlineData &&
-      !(
-        p.inlineData.mimeType?.startsWith("image/") ||
-        p.inlineData.mime_type?.startsWith("image/")
-      )
+      (p.inlineData.mimeType?.startsWith("image/") ||
+        p.inlineData.mime_type?.startsWith("image/"))
     ) {
       const data = p.inlineData.data;
       const mimeType = p.inlineData.mimeType || p.inlineData.mime_type!;
@@ -269,6 +298,71 @@ export default function Home() {
   });
 
   const modelFiles = Array.from(uniqueFiles.values());
+
+  if (!isAuthenticated) {
+    return (
+      <main className="min-h-screen bg-background text-foreground flex items-center justify-center p-4 relative overflow-hidden">
+        <Image
+          src="/main.png"
+          alt="App Preview"
+          fill
+          className="object-cover opacity-80 blur-sm"
+          priority
+        />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-purple-900/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 right-0 w-[800px] h-[600px] bg-indigo-900/10 rounded-full blur-3xl pointer-events-none" />
+
+        <Card className="w-full max-w-md p-8 bg-background/40 backdrop-blur-md border-primary/10 shadow-xl relative z-10">
+          <div className="text-center mb-8 space-y-2">
+            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4 text-primary">
+              <Lock className="w-8 h-8" />
+            </div>
+            <h1 className="text-3xl font-bold bg-linear-to-r from-fuchsia-500 via-purple-500 to-indigo-500 bg-clip-text text-transparent">
+              Admin Access Required
+            </h1>
+            <p className="text-muted-foreground">
+              Please enter the system admin token to continue.
+            </p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="password">Admin Token</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="Enter admin token..."
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                className="bg-background/50"
+              />
+            </div>
+
+            {authError && (
+              <p className="text-sm text-destructive text-center font-medium">
+                {authError}
+              </p>
+            )}
+
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={isVerifying || !passwordInput}
+            >
+              {isVerifying ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                "Unlock Access"
+              )}
+            </Button>
+          </form>
+        </Card>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-background text-foreground p-8 relative overflow-hidden">
@@ -419,7 +513,7 @@ export default function Home() {
                 <li>Financial Statement Analysis</li>
                 <li>Trend Identification</li>
                 <li>Anomaly Detection</li>
-                <li>Chart Generation</li>
+                <li>Chart & PDF File Generation </li>
                 <li>Python Code Execution</li>
               </ul>
             </Card>

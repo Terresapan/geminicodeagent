@@ -3,10 +3,11 @@ FastAPI application for Data Analysis Agent.
 Handles API routes and delegates business logic to services.
 """
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi import Request
+from fastapi.security import APIKeyHeader
 import os
 from dotenv import load_dotenv
 
@@ -14,6 +15,9 @@ from services import AnalysisService
 
 # Load environment variables
 load_dotenv()
+
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
+api_key_header = APIKeyHeader(name="X-Admin-Token", auto_error=False)
 
 # Initialize FastAPI app
 app = FastAPI(title="Data Analysis Agent API")
@@ -28,7 +32,19 @@ app.add_middleware(
 )
 
 # Initialize services
-analysis_service = AnalysisService(api_key=os.environ.get("GOOGLE_API_KEY"))
+analysis_service = AnalysisService(api_key=os.environ.get("GEMINI_API_KEY"))
+
+async def verify_token(token: str = Depends(api_key_header)):
+    if not ADMIN_TOKEN:
+        # If no token set in env, allow access (dev mode)
+        return True
+    
+    if token != ADMIN_TOKEN:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid admin token"
+        )
+    return True
 
 # ==================== Health Check ====================
 
@@ -37,9 +53,14 @@ async def root():
     """Health check endpoint."""
     return {"message": "Data Analysis Agent Backend is running"}
 
+@app.post("/verify-auth")
+async def verify_auth_endpoint(authorized: bool = Depends(verify_token)):
+    """Verify authentication token."""
+    return {"status": "authenticated"}
+
 # ==================== File Analysis ====================
 
-@app.post("/analyze")
+@app.post("/analyze", dependencies=[Depends(verify_token)])
 async def analyze(
     file: UploadFile = File(None),
     query: str = Form(...),
@@ -84,7 +105,7 @@ async def analyze(
 
 # ==================== Chat Operations ====================
 
-@app.post("/chat/create")
+@app.post("/chat/create", dependencies=[Depends(verify_token)])
 async def create_chat(
     file: UploadFile = File(None),
     model: str = Form("gemini-2.5-flash")
@@ -124,7 +145,7 @@ async def create_chat(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/chat/{chat_id}/message")
+@app.post("/chat/{chat_id}/message", dependencies=[Depends(verify_token)])
 async def send_chat_message(
     chat_id: str,
     request: Request
@@ -162,7 +183,7 @@ async def send_chat_message(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.delete("/chat/{chat_id}")
+@app.delete("/chat/{chat_id}", dependencies=[Depends(verify_token)])
 async def delete_chat(chat_id: str):
     """
     Delete a chat session.
