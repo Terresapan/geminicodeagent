@@ -16,7 +16,12 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { createChat, sendChatMessage, deleteChat, AnalysisPart } from "@/lib/api";
+import {
+  createChat,
+  sendChatMessage,
+  deleteChat,
+  AnalysisPart,
+} from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Send, Loader2, Trash2, DollarSign } from "lucide-react";
 
@@ -140,8 +145,12 @@ export default function Home() {
 
   const handleDeleteChat = async () => {
     if (!chatId) return;
-    
-    if (!confirm("Are you sure you want to delete this chat session? This action cannot be undone.")) {
+
+    if (
+      !confirm(
+        "Are you sure you want to delete this chat session? This action cannot be undone."
+      )
+    ) {
       return;
     }
 
@@ -262,13 +271,17 @@ export default function Home() {
   const modelFiles = Array.from(uniqueFiles.values());
 
   return (
-    <main className="min-h-screen bg-background text-foreground p-8">
-      <div className="max-w-6xl mx-auto space-y-8">
+    <main className="min-h-screen bg-background text-foreground p-8 relative overflow-hidden">
+      {/* Ambient Background Glow */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-purple-900/20 rounded-full blur-3xl -z-10 pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-[800px] h-[600px] bg-indigo-900/10 rounded-full blur-3xl -z-10 pointer-events-none" />
+
+      <div className="max-w-6xl mx-auto space-y-8 relative z-10">
         <div className="text-center space-y-4">
-          <h1 className="text-4xl font-bold mb-2 bg-linear-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent">
+          <h1 className="text-5xl font-extrabold mb-2 bg-linear-to-r from-fuchsia-500 via-purple-500 to-indigo-500 bg-clip-text text-transparent tracking-tight drop-shadow-sm">
             Data Analysis Agent
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-lg">
             Upload your financial data and let AI analyze it
           </p>
         </div>
@@ -276,10 +289,10 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           <div className="lg:col-span-1 space-y-6">
             {/* Model Selection Card */}
-            <Card className="p-4 bg-muted/50">
+            <Card className="p-4 bg-background/40 backdrop-blur-md border-primary/10 shadow-lg hover:border-primary/30 transition-all duration-300">
               <h3 className="font-semibold mb-2">Select Model</h3>
               <Select value={selectedModel} onValueChange={setSelectedModel}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full bg-background/50 border-primary/20 focus:ring-primary/50">
                   <SelectValue placeholder="Select a model" />
                 </SelectTrigger>
                 <SelectContent>
@@ -306,13 +319,13 @@ export default function Home() {
             {!chatId ? (
               <FileUpload onUpload={handleUpload} isLoading={isLoading} />
             ) : (
-              <Card className="p-4 bg-muted/50 flex flex-col h-[500px]">
+              <Card className="p-4 bg-background/40 backdrop-blur-md border-primary/10 shadow-lg hover:border-primary/30 transition-all duration-300 flex flex-col h-[500px]">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="font-semibold">Chat History</h3>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                     onClick={handleDeleteChat}
                     disabled={isLoading || isDeleting}
                     title="Delete Chat"
@@ -325,14 +338,14 @@ export default function Home() {
                     <span className="sr-only">Delete Chat</span>
                   </Button>
                 </div>
-                <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
+                <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2 scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
                   {chatHistory.map((msg, i) => (
                     <div
                       key={i}
-                      className={`p-3 rounded-lg text-sm ${
+                      className={`p-3 rounded-lg text-sm shadow-sm ${
                         msg.role === "user"
                           ? "bg-primary text-primary-foreground ml-4"
-                          : "bg-muted text-muted-foreground mr-4"
+                          : "bg-muted/80 text-muted-foreground mr-4 border border-border/50"
                       }`}
                     >
                       <p className="font-semibold text-xs mb-1 opacity-70">
@@ -350,11 +363,11 @@ export default function Home() {
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    className="min-h-20 resize-none"
+                    className="min-h-20 resize-none bg-background/50 border-primary/20 focus-visible:ring-primary/50"
                     disabled={isLoading}
                   />
                   <Button
-                    className="w-full"
+                    className="w-full shadow-md shadow-primary/20"
                     onClick={handleSendMessage}
                     disabled={isLoading || !chatInput.trim()}
                   >
@@ -370,31 +383,39 @@ export default function Home() {
             )}
 
             {costData && (
-              <Card className="p-4 bg-muted/50">
-                <h3 className="font-semibold mb-2 flex items-center gap-2">
+              <Card className="p-4 bg-background/40 backdrop-blur-md border-primary/10 shadow-lg hover:border-primary/30 transition-all duration-300">
+                <h3 className="font-semibold mb-2 flex items-center gap-2 text-primary">
                   <DollarSign className="w-4 h-4" />
                   Estimated Cost
                 </h3>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Input Tokens:</span>
-                    <span>{costData.input_tokens?.toLocaleString() || 0}</span>
+                    <span className="font-mono">
+                      {costData.input_tokens?.toLocaleString() || 0}
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Output Tokens:</span>
-                    <span>{costData.output_tokens?.toLocaleString() || 0}</span>
+                    <span className="text-muted-foreground">
+                      Output Tokens:
+                    </span>
+                    <span className="font-mono">
+                      {costData.output_tokens?.toLocaleString() || 0}
+                    </span>
                   </div>
-                  <div className="border-t pt-2 mt-2 flex justify-between font-medium">
+                  <div className="border-t border-border/50 pt-2 mt-2 flex justify-between font-medium">
                     <span>Total Cost:</span>
-                    <span>${(costData.total_cost || 0).toFixed(6)}</span>
+                    <span className="font-mono text-primary">
+                      ${(costData.total_cost || 0).toFixed(6)}
+                    </span>
                   </div>
                 </div>
               </Card>
             )}
 
-            <Card className="p-4 bg-muted/50">
+            <Card className="p-4 bg-background/40 backdrop-blur-md border-primary/10 shadow-lg hover:border-primary/30 transition-all duration-300">
               <h3 className="font-semibold mb-1">Capabilities</h3>
-              <ul className="text-sm text-muted-foreground space-y-2 list-disc list-inside">
+              <ul className="text-sm text-muted-foreground space-y-2 list-disc list-inside marker:text-primary">
                 <li>Financial Statement Analysis</li>
                 <li>Trend Identification</li>
                 <li>Anomaly Detection</li>
@@ -406,60 +427,99 @@ export default function Home() {
 
           <div className="lg:col-span-3">
             {analysisParts.length > 0 ? (
-              <Card className="p-6">
+              <Card className="p-6 bg-background/60 backdrop-blur-xl border-primary/10 shadow-xl h-full">
                 <Tabs
                   defaultValue="analysis"
                   value={activeTab}
                   onValueChange={setActiveTab}
+                  className="h-full flex flex-col"
                 >
-                  <TabsList className="grid w-full grid-cols-4 mb-6">
-                    <TabsTrigger value="analysis">Analysis</TabsTrigger>
-                    <TabsTrigger value="code">Code</TabsTrigger>
-                    <TabsTrigger value="charts">
+                  <TabsList className="grid w-full grid-cols-4 mb-6 bg-muted/50 p-1">
+                    <TabsTrigger
+                      value="analysis"
+                      className="data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                    >
+                      Analysis
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="code"
+                      className="data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                    >
+                      Code
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="charts"
+                      className="data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                    >
                       Charts ({chartImages.length})
                     </TabsTrigger>
-                    <TabsTrigger value="files">
+                    <TabsTrigger
+                      value="files"
+                      className="data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                    >
                       Files ({modelFiles.length})
                     </TabsTrigger>
                   </TabsList>
 
-                  <TabsContent value="analysis" className="mt-0">
-                    <AnalysisTab content={analysisContent} />
-                  </TabsContent>
+                  <div className="flex-1 overflow-hidden">
+                    <TabsContent
+                      value="analysis"
+                      className="mt-0 h-full overflow-auto pr-2 scrollbar-thin scrollbar-thumb-primary/20"
+                    >
+                      <AnalysisTab content={analysisContent} />
+                    </TabsContent>
 
-                  <TabsContent value="code" className="mt-0">
-                    <CodeTab code={codeContent} />
-                  </TabsContent>
+                    <TabsContent
+                      value="code"
+                      className="mt-0 h-full overflow-auto pr-2 scrollbar-thin scrollbar-thumb-primary/20"
+                    >
+                      <CodeTab code={codeContent} />
+                    </TabsContent>
 
-                  <TabsContent value="charts" className="mt-0">
-                    <ChartsTab images={chartImages} />
-                  </TabsContent>
+                    <TabsContent
+                      value="charts"
+                      className="mt-0 h-full overflow-auto pr-2 scrollbar-thin scrollbar-thumb-primary/20"
+                    >
+                      <ChartsTab images={chartImages} />
+                    </TabsContent>
 
-                  <TabsContent value="files" className="mt-0">
-                    <ModelFilesTab files={modelFiles} />
-                  </TabsContent>
+                    <TabsContent
+                      value="files"
+                      className="mt-0 h-full overflow-auto pr-2 scrollbar-thin scrollbar-thumb-primary/20"
+                    >
+                      <ModelFilesTab files={modelFiles} />
+                    </TabsContent>
+                  </div>
                 </Tabs>
               </Card>
             ) : isLoading ? (
-              <div className="h-full flex items-center justify-center p-12 border-2 border-dashed rounded-lg bg-muted/10 animate-pulse">
+              <div className="h-full flex items-center justify-center p-12 border-2 border-dashed border-primary/20 rounded-xl bg-background/40 backdrop-blur-sm animate-pulse">
                 <div className="text-center space-y-4">
                   <div className="flex justify-center">
-                    <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin shadow-lg shadow-primary/20"></div>
                   </div>
                   <div className="space-y-2">
-                    <p className="text-lg font-medium">Analyzing...</p>
-                    <p className="text-sm text-muted-foreground animate-pulse">
+                    <p className="text-xl font-medium bg-linear-to-r from-fuchsia-500 to-indigo-500 bg-clip-text text-transparent">
+                      Analyzing...
+                    </p>
+                    <p className="text-sm text-muted-foreground">
                       {getLoadingMessage()}
                     </p>
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="h-full flex items-center justify-center p-12 border-2 border-dashed rounded-lg text-muted-foreground bg-muted/10">
-                <div className="text-center">
-                  <p className="text-lg font-medium">Ready to Analyze</p>
-                  <p className="text-sm">
-                    Upload a file to see the results here.
+              <div className="h-full flex items-center justify-center p-12 border-2 border-dashed border-muted-foreground/20 rounded-xl text-muted-foreground bg-background/40 backdrop-blur-sm hover:border-primary/30 transition-colors duration-300">
+                <div className="text-center space-y-2">
+                  <div className="w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center mx-auto mb-4 text-primary">
+                    <Send className="w-8 h-8 ml-1" />
+                  </div>
+                  <p className="text-xl font-medium text-foreground">
+                    Ready to Analyze
+                  </p>
+                  <p className="text-sm max-w-sm mx-auto">
+                    Upload a financial document (PDF, CSV, Excel) to the left to
+                    generate insights, code, and visualizations.
                   </p>
                 </div>
               </div>
