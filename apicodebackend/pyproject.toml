@@ -1,9 +1,9 @@
 [project]
-name = "backend"
+name = "apicodebackend"
 version = "0.1.0"
-description = "Add your description here"
+description = "Data anaysis and visualization agent with Gemini api"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.118.3",
     "uvicorn>=0.38.0",

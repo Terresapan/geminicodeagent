@@ -28,6 +28,7 @@ env/
 ENV/
 env.bak/
 venv.bak/
+backend/.venv/
 
 # Environment variables
 .env
@@ -47,6 +48,7 @@ frontend/.next/
 frontend/out/
 frontend/build/
 frontend/dist/
+frontend/node_modules/
 
 # Node.js
 node_modules/
