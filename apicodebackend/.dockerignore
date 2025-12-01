@@ -1,0 +1,15 @@
+# apicodebackend/.dockerignore
+.git
+.gitignore
+.dockerignore
+__pycache__
+.venv
+venv
+env
+.env
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+README.md
+Dockerfile

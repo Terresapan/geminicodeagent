@@ -1,0 +1,30 @@
+steps:
+  # Build the container image using the Dockerfile in the apicodebackend folder
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      [
+        "build",
+        "-t",
+        "gcr.io/$PROJECT_ID/gemini-backend:$COMMIT_SHA",
+        "./apicodebackend",
+      ]
+
+  # Push the container image to Container Registry
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["push", "gcr.io/$PROJECT_ID/gemini-backend:$COMMIT_SHA"]
+
+  # Deploy container image to Cloud Run
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: gcloud
+    args:
+      - "run"
+      - "deploy"
+      - "gemini-code-agent" # This matches your Service Name
+      - "--image"
+      - "gcr.io/$PROJECT_ID/gemini-backend:$COMMIT_SHA"
+      - "--region"
+      - "us-central1"
+      - "--allow-unauthenticated"
+
+images:
+  - "gcr.io/$PROJECT_ID/gemini-backend:$COMMIT_SHA"

@@ -23,9 +23,10 @@ api_key_header = APIKeyHeader(name="X-Admin-Token", auto_error=False)
 app = FastAPI(title="Data Analysis Agent API")
 
 # Configure CORS
+origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1,5 +1,5 @@
-fastapi
-uvicorn
-google-genai
-python-multipart
-python-dotenv
+fastapi==0.118.3
+uvicorn==0.38.0
+google-genai==1.52.0
+python-multipart==0.0.20
+python-dotenv==1.2.1
