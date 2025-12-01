@@ -22,11 +22,24 @@ api_key_header = APIKeyHeader(name="X-Admin-Token", auto_error=False)
 # Initialize FastAPI app
 app = FastAPI(title="Data Analysis Agent API")
 
-# Configure CORS
-origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+# Get allowed origins from env, defaulting to local development URLs
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
+origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
+
+# Always allow local development URLs (fixes the localhost vs 127.0.0.1 issue)
+if not allowed_origins_env or "localhost" in allowed_origins_env:
+    origins.extend([
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ])
+
+print(f"Server starting with ALLOWED_ORIGINS: {origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=origins, # Must be specific URLs, never ["*"] if credentials=True
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
