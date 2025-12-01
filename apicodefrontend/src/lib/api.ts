@@ -19,18 +19,7 @@ export interface AnalysisPart {
     name?: string;
     data?: string;
   };
-  costData?: {
-    input_tokens: number;
-    output_tokens: number;
-    cached_tokens: number;
-    total_tokens: number;
-    input_cost: number;
-    output_cost: number;
-    caching_cost: number;
-    total_cost: number;
-    currency: string;
-    model: string;
-  };
+  costData?: any;
 }
 
 export interface ChatMessage {
