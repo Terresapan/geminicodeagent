@@ -1,3 +1,7 @@
+// This allows Vercel to inject the production URL, but falls back to localhost for you.
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+// --- Type Definitions ---
 export interface AnalysisPart {
   text?: string;
   executableCode?: {
@@ -35,8 +39,6 @@ export interface ChatSession {
   messages: ChatMessage[];
 }
 
-const API_BASE_URL = "http://localhost:8000";
-
 let authPassword = "";
 
 export function setAuthPassword(password: string) {
@@ -51,6 +53,7 @@ function getHeaders(base: Record<string, string> = {}): Record<string, string> {
   return headers;
 }
 
+// --- Authentication Functions ---
 export async function verifyAuth(password: string): Promise<boolean> {
   try {
     const response = await fetch(`${API_BASE_URL}/verify-auth`, {
