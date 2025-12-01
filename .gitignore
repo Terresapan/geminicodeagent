@@ -1,12 +1,18 @@
-# Python
+# ===========================
+# PYTHON / BACKEND
+# ===========================
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-build/
+
+# Distribution / Packaging (Commented out dangerous generics)
+# build/
+# dist/
+# lib/      <-- THIS WAS THE CULPRIT blocking src/lib
+# lib64/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -19,7 +25,7 @@ wheels/
 *.egg
 MANIFEST
 
-# Virtual environments
+# Virtual Environments
 venv/
 .venv/
 env/
@@ -28,49 +34,34 @@ env.bak/
 venv.bak/
 backend/.venv/
 
-# Environment variables
+# ===========================
+# GENERAL / IDE
+# ===========================
 .env
 .env.local
 .env.*.local
-
-# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 .DS_Store
-
-# Next.js
-frontend/.next/
-frontend/out/
-frontend/build/
-frontend/dist/
-frontend/node_modules/
-
-# Node.js
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# Testing
-.coverage
-.pytest_cache/
-htmlcov/
-*.cover
-.hypothesis/
+Thumbs.db
 
 # Logs
 *.log
 logs/
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Temporary files
-*.tmp
-*.temp
-.cache/
+# ===========================
+# FRONTEND / NODE SPECIFIC
+# ===========================
+# We leave specific ignores to the apicodefrontend/.gitignore,
+# but we can keep these global safeguards:
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.coverage
+.pytest_cache/
+htmlcov/
